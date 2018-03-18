@@ -1,4 +1,4 @@
-.DS_Store
-bin
-__pycache__
+.DS_Store/
+bin/
+__pycache__/
 config.ini
