@@ -60,8 +60,8 @@ def write_solution(solution, locations, record_set, service_time, matrix, path):
         ws.append(record_set.columns + [ "Arrival Time", "Departure Time", "Travel Time", "Distance"])
 
         # Append nodes to the worksheet
-        for i, node in enumerate(vehicle.nodes):
-            if i == 0:  # The first node is the depot. Departure time = Arrival time of next - travel time 
+        for j, node in enumerate(vehicle.nodes):
+            if j == 0:  # The first node is the depot. Departure time = Arrival time of next - travel time 
                 next_time = vehicle.nodes[1].time
                 dist_time = matrix.get_entry(node.location, vehicle.nodes[1].location)
                 seconds = next_time - dist_time.time
@@ -73,13 +73,13 @@ def write_solution(solution, locations, record_set, service_time, matrix, path):
                 departure_td = td + datetime.timedelta(minutes = service_time)
                 departure_time = str(departure_td)
 
-                prev_location = vehicle.nodes[i - 1].location
+                prev_location = vehicle.nodes[j - 1].location
                 dist_time = matrix.get_entry(prev_location, node.location)
                 distance = round(dist_time.distance, 1)
 
                 travel_time = str(datetime.timedelta(seconds = dist_time.time))
 
-                if i == len(vehicle.nodes) - 1: # Arrival at the depot
+                if j == len(vehicle.nodes) - 1: # Arrival at the depot
                     arrival_time = str(datetime.timedelta(seconds = node.time))
                     ws.append(([""] * (len(record_set.columns))) + [arrival_time, "", travel_time, distance])
                 else:

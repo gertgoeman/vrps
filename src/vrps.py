@@ -9,7 +9,7 @@ import datahelpers
 from solver import Solver
 from datetime import datetime
 
-TIME_LIMIT_SOLUTION_MS = 300000 # 5 minutes
+TIME_LIMIT_SOLUTION_MS = 20000 # 20 seconds
 MAX_VEHICLES = 100
 
 class NotifyQueueLogHandler(logging.Handler):
