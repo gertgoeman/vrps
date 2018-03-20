@@ -1,15 +1,17 @@
 import openpyxl
 import datetime
 
+class RecordSet(object):
+    def __init__(self, columns, entries):
+        self.columns = columns
+        self.entries = entries
+
 def read_locations(path):
     wb = openpyxl.load_workbook(filename = path)
     ws = wb.active
 
-    colnames = ["street", "nr", "bus", "state", "postal code", "city", "country", "start time", "end time"]
-
     first_row = next(ws.rows)
-    col_indices = { n: cell.value.lower() for n, cell in enumerate(first_row)
-                    if cell.value and cell.value.lower() in colnames }
+    columns = [ cell.value or "" for cell in first_row ]
 
     entries = []
 
@@ -17,13 +19,17 @@ def read_locations(path):
         if i == 0: continue     # the first row contains the headers
         entry = {}
         for index, cell in enumerate(row):
-            if index in col_indices:
-                if cell.value is None: continue
+            column = ""
+            if index < len(columns):
+                column = columns[index]
 
-                colname = col_indices[index]
-                entry[colname] = str(cell.value)
+            entry[column.lower()] = str(cell.value).split("|")[0] # Values can contains | characters. If they do, we only want to take the first part of the value.
 
         # Validate entry
+        if "address" not in entry:
+            raise ValueError("Unable to find 'Address' for entry in excel sheet.")
+        if "city" not in entry:
+            raise ValueError("Unable to find 'City' for entry in excel sheet.")
         if "start time" not in entry:
             raise ValueError("Unable to find 'Start Time' for entry in excel sheet.")
         if "end time" not in entry:
@@ -31,9 +37,9 @@ def read_locations(path):
 
         entries.append(entry)
 
-    return entries
+    return RecordSet(columns, entries)
 
-def write_solution(solution, locations, addresses, matrix, path):
+def write_solution(solution, locations, record_set, service_time, matrix, path):
     wb = openpyxl.Workbook()
 
     i = 0
@@ -51,25 +57,35 @@ def write_solution(solution, locations, addresses, matrix, path):
         i = i + 1
 
         # Insert headers
-        ws.append([ "Address", "Approx time" ])
+        ws.append(record_set.columns + [ "Arrival Time", "Departure Time", "Travel Time", "Distance"])
 
         # Append nodes to the worksheet
         for i, node in enumerate(vehicle.nodes):
-            if not node.location in locations: raise ValueError("Unknown location: " + str(node.location))
-
-            loc_idx = locations.index(node.location)
-            address = addresses[loc_idx]
-
-            # The start time in the depot = arrival(first location) - travel_time
-            if i == 0:
+            if i == 0:  # The first node is the depot. Departure time = Arrival time of next - travel time 
                 next_time = vehicle.nodes[1].time
                 dist_time = matrix.get_entry(node.location, vehicle.nodes[1].location)
                 seconds = next_time - dist_time.time
+                departure_time = str(datetime.timedelta(seconds = seconds))
+                ws.append(([""] * (len(record_set.columns) + 1)) + [departure_time]) # Empty columns for everything except departure time
             else:
-                seconds = node.time
+                td = datetime.timedelta(seconds = node.time)
+                arrival_time = str(td)
+                departure_td = td + datetime.timedelta(minutes = service_time)
+                departure_time = str(departure_td)
 
-            time = str(datetime.timedelta(seconds = seconds))
+                prev_location = vehicle.nodes[i - 1].location
+                dist_time = matrix.get_entry(prev_location, node.location)
+                distance = round(dist_time.distance, 1)
 
-            ws.append([address, time])
+                travel_time = str(datetime.timedelta(seconds = dist_time.time))
+
+                if i == len(vehicle.nodes) - 1: # Arrival at the depot
+                    arrival_time = str(datetime.timedelta(seconds = node.time))
+                    ws.append(([""] * (len(record_set.columns))) + [arrival_time, "", travel_time, distance])
+                else:
+                    loc_idx = locations.index(node.location)
+                    entry = record_set.entries[loc_idx - 1]
+                    row = [entry[k.lower()] or "" for k in record_set.columns]
+                    ws.append(row + [ arrival_time, departure_time, travel_time, distance ])
 
     wb.save(filename = path)

@@ -25,7 +25,7 @@ def handle_calculate(queue, model):
         ensure_source_file_exist(model)
 
         # Load the data from the input file
-        entries = excel.read_locations(model.source_file)
+        record_set = excel.read_locations(model.source_file)
         
         # Resolve coordinates and get time windows
         geo_helper = geoservices.GeoHelper(model.configuration["google_api_key"], model.configuration["bing_api_key"])
@@ -36,12 +36,10 @@ def handle_calculate(queue, model):
         start_address = model.configuration["start_address"]
         start_coord = geo_helper.geocode(start_address)
         locations.append(start_coord)
-        addresses.append(start_address)
 
-        for entry in entries:
+        for entry in record_set.entries:
             address = datahelpers.get_address_from_entry(entry, model.configuration["default_country"])
             coords = geo_helper.geocode(address)
-            addresses.append(address)
             locations.append(coords)
             time_windows.append(datahelpers.get_time_window_from_entry(entry))
 
@@ -49,23 +47,24 @@ def handle_calculate(queue, model):
         matrix = geo_helper.calculate_distance_time_matrix(locations)
 
         # Solve
+        service_time_seconds = model.configuration["service_time"] * 60
         locations_without_start = locations[1:]
 
-        solver = Solver(start_coord, locations_without_start, time_windows, model.configuration["service_time"], MAX_VEHICLES, TIME_LIMIT_SOLUTION_MS)
-        solver.travel_time_callback = travel_time_callback(locations, matrix)
+        solver = Solver(start_coord, locations_without_start, time_windows, service_time_seconds, MAX_VEHICLES, TIME_LIMIT_SOLUTION_MS)
+        solver.travel_time_callback = travel_time_callback(matrix)
         solution = solver.solve()
 
         if not solution:
             queue.put(views.show_message("No solution", "No solution could be found. Please adjust time windows.", views.MessageLevel.ERROR))
         else:
-            excel.write_solution(solution, locations, addresses, matrix, model.destination_file)
+            excel.write_solution(solution, locations, record_set, model.configuration["service_time"], matrix, model.destination_file)
             queue.put(views.show_message("Done", "Calculation finished! The solution has been written to the destination file.", views.MessageLevel.INFO))
 
     except Exception as e:
         queue.put(views.show_message("An error occurred", str(e), views.MessageLevel.ERROR))
         raise e
 
-def travel_time_callback(locations, matrix):
+def travel_time_callback(matrix):
     def callback(from_loc, to_loc):
         # Get time from the matrix
         entry = matrix.get_entry(from_loc, to_loc)

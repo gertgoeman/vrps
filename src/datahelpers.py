@@ -8,22 +8,14 @@ TimeWindow = collections.namedtuple("TimeWindow", ["start", "end"])
 def get_address_from_entry(entry, default_country):
     result = ""
 
-    if "street" in entry:
-        result = result + str(entry["street"]) + " "
-    if "nr" in entry:
-        result = result + str(entry["nr"]) + " "
-    if "bus" in entry:
-        result = result + str(entry["bus"]) + " "
+    if "address" in entry:
+        result = result + str(entry["address"]) + " "
     if "postal code" in entry:
         result = result + str(entry["postal code"]) + " "
     if "city" in entry:
         result = result + str(entry["city"]) + " "
-    if "state" in entry:
-        result = result + str(entry["state"]) + " "
-    if "country" in entry:
-        result = result + str(entry["country"]) + " "
-    else:
-        result = result + default_country + " "
+    
+    result = result + default_country + " "
 
     return result.rstrip()
 
