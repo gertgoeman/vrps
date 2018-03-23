@@ -96,15 +96,7 @@ class Solver(object):
 
         total_distance_callback = self.__total_distance_callback
 
-        routing.AddDimension(total_distance_callback,
-                             dist_horizon,
-                             dist_horizon,
-                             dist_fix_start_cumul_to_zero_time,
-                             distance)
-
-        for vehicle_nbr in range(self.num_vehicles):
-            var = routing.CumulVar(routing.End(vehicle_nbr), distance)
-            routing.AddVariableMinimizedByFinalizer(var)
+        routing.SetArcCostEvaluatorOfAllVehicles(total_distance_callback)
 
         # Add time dimension.
         time_horizon = 24 * 3600 # Used as both the upper bound for the slack variable (maximum amount of time between 2 nodes) and the upper bound for the cummulative variable (total maximum amount of time).
@@ -121,8 +113,6 @@ class Solver(object):
 
         # Add time window constraints.
         time_dimension = routing.GetDimensionOrDie(time)
-
-        time_dimension.SetSpanCostCoefficientForAllVehicles(10) # Make it more expensive, but allowed to be early or late.
 
         for location in range(1, num_locations):
             start = self.time_windows[location][0]
