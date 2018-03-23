@@ -11,6 +11,7 @@ import dateutil.parser
 class NotificationType(enum.Enum):
     SHOW_MESSAGE = 1
     EMIT_LOG = 2
+    DONE = 3
 
 class ViewModel(object):
     def __init__(self):
@@ -35,6 +36,11 @@ def emit_log(level, message):
         "type": NotificationType.EMIT_LOG,
         "message": message,
         "level": level
+    }
+
+def done():
+    return {
+        "type": NotificationType.DONE
     }
 
 class MainWindow(Tk):
@@ -87,8 +93,8 @@ class MainWindow(Tk):
         btn_destination = Button(optimize_pane, text = "Browse", command = self.__select_destination)
         btn_destination.grid(row = 3, column = 1, sticky = E)
 
-        btn_calculate = Button(optimize_pane, text = "Calculate", command = self.__handle_calculate)
-        btn_calculate.grid(row = 4, column = 0, columnspan = 2, pady = 10)
+        self.__btn_calculate = Button(optimize_pane, text = "Calculate", command = self.__handle_calculate)
+        self.__btn_calculate.grid(row = 4, column = 0, columnspan = 2, pady = 10)
 
         lbl_output = Label(optimize_pane, text = "Output:")
         lbl_output.grid(row = 5, column = 0, sticky = W, pady = 5)
@@ -181,6 +187,8 @@ class MainWindow(Tk):
             if error:
                 messagebox.showerror("Validation error", error)
             else:
+                self.__btn_calculate.config(state = DISABLED) # Disable calculate button
+
                 viewmodel = self.__create_viewmodel()
                 thread = threading.Thread(target = self.calculate_callback, args=[self.notify_queue, viewmodel])
                 thread.start()
@@ -236,18 +244,24 @@ class MainWindow(Tk):
 
     def __handle_notifications(self):
         try:
-            result = self.notify_queue.get(0)
-            notification_type = result["type"]
+            for i in range(5):
+                result = self.notify_queue.get(0)
+                notification_type = result["type"]
 
-            if notification_type == NotificationType.SHOW_MESSAGE:
-                self.__show_message(result)
-            elif notification_type == NotificationType.EMIT_LOG:
-                self.__emit_log(result)
-
+                if notification_type == NotificationType.SHOW_MESSAGE:
+                    self.__show_message(result)
+                elif notification_type == NotificationType.EMIT_LOG:
+                    self.__emit_log(result)
+                elif notification_type == NotificationType.DONE:
+                    self.__done()
         except queue.Empty:
             pass
                 
         self.after(100, self.__handle_notifications)
+
+    def __done(self):
+        self.__btn_calculate.config(state = NORMAL) # Enable calculate button
+        self.__show_message(show_message("Done", "Calculation finished! The solution has been written to the destination file.", MessageLevel.INFO))
 
     def __show_message(self, data):
         level = data["level"]

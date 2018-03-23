@@ -4,6 +4,10 @@ import collections
 import utils
 import requests
 import json
+import pickle
+import os.path
+import shutil
+import tempfile
 
 logger = logging.getLogger()
 
@@ -45,20 +49,38 @@ class DistanceTimeMatrix(object):
     def __str__(self):
         return str(self.__matrix)
 
-geocode_cache = {}
-matrix_cache = {}
-
 class GeoHelper(object):
+    GEOCODE_CACHE_FILE = "geocodecache.bin"
+    DISTANCE_TIME_MATRIX_CACHE_FILE = "distancetimematrixcache.bin";
+
     def __init__(self, google_api_key, bing_api_key):
         self.__gmaps = googlemaps.Client(key = google_api_key)
         self.__bing_api_key = bing_api_key
+        self.__geocode_cache = {}
+        self.__distance_matrix_cache = {}
+
+    def load_cache(self):
+        if os.path.isfile(GeoHelper.GEOCODE_CACHE_FILE):
+            with open(GeoHelper.GEOCODE_CACHE_FILE, "rb") as f:
+                self.__geocode_cache = pickle.load(f)
+
+        if os.path.isfile(GeoHelper.DISTANCE_TIME_MATRIX_CACHE_FILE):
+            with open(GeoHelper.DISTANCE_TIME_MATRIX_CACHE_FILE, "rb") as f2:
+                self.__distance_matrix_cache = pickle.load(f2)
+
+    def persist_cache(self):
+        with open(GeoHelper.GEOCODE_CACHE_FILE, "wb") as f:
+            pickle.dump(self.__geocode_cache, f)
+
+        with open(GeoHelper.DISTANCE_TIME_MATRIX_CACHE_FILE, "wb") as f2:
+            pickle.dump(self.__distance_matrix_cache, f2)
 
     def geocode(self, address):
         logger.info("Getting coordinates for address '{0}'".format(address))
 
         # If the coordinates have already been calculated, return them from cache.
-        if address in geocode_cache:
-            return geocode_cache[address]
+        if address in self.__geocode_cache:
+            return self.__geocode_cache[address]
 
         geo = self.__gmaps.geocode(address)
 
@@ -70,7 +92,7 @@ class GeoHelper(object):
             geo[0]["geometry"]["location"]["lng"])
 
         # Update the cache
-        geocode_cache[address] = result
+        self.__geocode_cache[address] = result
 
         return result
 
@@ -80,8 +102,8 @@ class GeoHelper(object):
         key_dest = ":".join([str(coord) for coord in destinations])
         cache_key = key_origin + "-" + key_dest
 
-        if cache_key in matrix_cache:
-            return matrix_cache[cache_key]
+        if cache_key in self.__distance_matrix_cache:
+            return self.__distance_matrix_cache[cache_key]
 
         body = {
             "origins": [],
@@ -126,7 +148,7 @@ class GeoHelper(object):
             matrix[origin_idx][dest_idx] = DistTime(distance, duration)
 
         # Update the cache
-        matrix_cache[cache_key] = matrix
+        self.__distance_matrix_cache[cache_key] = matrix
 
         return matrix
 
@@ -145,5 +167,40 @@ class GeoHelper(object):
 
                 matrix = self.__get_bing_distance_matrix(batch, other_batch)
                 result.add_matrix(batch, other_batch, matrix)
+
+        return result
+
+    def __get_bing_map_image(self, locations):
+        # Build waypoint string
+        waypoints = ""
+
+        for i, coord in enumerate(locations):
+            waypoints = waypoints + "waypoint.{0}={1},{2}&".format(i + 1, coord.latitude, coord.longitude)
+
+        waypoints = waypoints.strip("&") # Remvoe leading and trailing ampersands
+
+        # Download the file
+        url = "https://dev.virtualearth.net/REST/v1/Imagery/Map/Road/Routes/driving?{0}&format=jpeg&mapSize=600,600&declutterPins=1&key={1}".format(waypoints, self.__bing_api_key)
+
+        response = requests.get(url, stream = True)
+        response.raise_for_status()
+
+        # Store the image in a temporary file
+        with tempfile.NamedTemporaryFile(suffix = ".jpeg", delete = False) as f:
+            response.raw.decode_content = True
+            shutil.copyfileobj(response.raw, f) 
+
+            return f.name
+
+    def get_map_images(self, solution):
+        result = []
+
+        for i, vehicle in enumerate(solution.vehicles):
+            logger.info("Getting map image for vehicle {0}.".format(i + 1))
+
+            locations = [node.location for node in vehicle.nodes]
+            path = self.__get_bing_map_image(locations)
+
+            result.append(path)
 
         return result

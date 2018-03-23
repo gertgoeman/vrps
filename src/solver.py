@@ -42,12 +42,26 @@ class Solver(object):
     def travel_time_callback(self, value):
         self.__travel_time_callback = value
 
+    @property 
+    def travel_distance_callback(self):
+        return self.__travel_distance_callback
+
+    @travel_distance_callback.setter
+    def travel_distance_callback(self, value):
+        self.__travel_distance_callback = value
+
     # The total time is the time calculated by the travel_time_callback + the service time
     def __total_time_callback(self, from_node, to_node):
         actual_from_node = self.locations[from_node]
         actual_to_node = self.locations[to_node]
 
         return self.travel_time_callback(actual_from_node, actual_to_node) + self.service_time
+
+    def __total_distance_callback(self, from_node, to_node):
+        actual_from_node = self.locations[from_node]
+        actual_to_node = self.locations[to_node]
+
+        return self.travel_distance_callback(actual_from_node, actual_to_node)
 
     def solve(self):
         logger.info("Calculating solution.")
@@ -62,21 +76,54 @@ class Solver(object):
         search_parameters.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
         search_parameters.time_limit_ms = self.time_limit_ms
 
+        # Add fixed dimension to count the number of nodes per vehicle
+        always_one = "Always One"
+
+        routing.AddConstantDimension(
+            1,
+            1000,  # Max 1000 nodes seems more than enough
+            True,
+            always_one)
+
+        for vehicle_nbr in range(self.num_vehicles):
+            var = routing.CumulVar(routing.End(vehicle_nbr), always_one)
+            routing.AddVariableMaximizedByFinalizer(var)
+
+        # Add distance dimension.
+        dist_horizon = 10000000 # (in meters) Used as both the upper bound for the slack variable (maximum amount of distance between 2 nodes) and the upper bound for the cummulative variable (total maximum amount of distance).
+        distance = "Distance"
+        dist_fix_start_cumul_to_zero_time = True
+
+        total_distance_callback = self.__total_distance_callback
+
+        routing.AddDimension(total_distance_callback,
+                             dist_horizon,
+                             dist_horizon,
+                             dist_fix_start_cumul_to_zero_time,
+                             distance)
+
+        for vehicle_nbr in range(self.num_vehicles):
+            var = routing.CumulVar(routing.End(vehicle_nbr), distance)
+            routing.AddVariableMinimizedByFinalizer(var)
+
         # Add time dimension.
-        horizon = 24 * 3600 # Used as both the upper bound for the slack variable (maximum amount of time between 2 nodes) and the upper bound for the cummulative variable (total maximum amount of time).
+        time_horizon = 24 * 3600 # Used as both the upper bound for the slack variable (maximum amount of time between 2 nodes) and the upper bound for the cummulative variable (total maximum amount of time).
         time = "Time"
-        fix_start_cumul_to_zero = True
+        time_fix_start_cumul_to_zero_time = True
 
         total_time_callback = self.__total_time_callback # I honestly have no idea why this is necessary, but if I don't do it, a segmentation fault is thrown.
 
         routing.AddDimension(total_time_callback,
-                             horizon,
-                             horizon,
-                             fix_start_cumul_to_zero,
+                             time_horizon,
+                             time_horizon,
+                             time_fix_start_cumul_to_zero_time,
                              time)
 
         # Add time window constraints.
         time_dimension = routing.GetDimensionOrDie(time)
+
+        time_dimension.SetSpanCostCoefficientForAllVehicles(10) # Make it more expensive, but allowed to be early or late.
+
         for location in range(1, num_locations):
             start = self.time_windows[location][0]
             end = self.time_windows[location][1]
@@ -108,7 +155,7 @@ class Solver(object):
             time_var = time_dimension.CumulVar(index)
             nodes.append(Node(self.locations[node_index], assignment.Value(time_var)))
 
-            if len(nodes) > 0:
+            if len(nodes) > 2: # 2 is from start to finish directly
                 vehicles.append(Vehicle(nodes))
 
         return Solution(vehicles)

@@ -13,6 +13,7 @@ macholib==1.9
 modulegraph==0.16
 openpyxl==2.5.0
 pefile==2017.11.5
+Pillow==5.0.0
 protobuf==3.3.0
 py3-ortools==6.4.4495
 pycparser==2.18

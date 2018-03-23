@@ -9,7 +9,7 @@ import datahelpers
 from solver import Solver
 from datetime import datetime
 
-TIME_LIMIT_SOLUTION_MS = 20000 # 20 seconds
+TIME_LIMIT_SOLUTION_MS = 120000 # 2 minutes (by trial and error)
 MAX_VEHICLES = 100
 
 class NotifyQueueLogHandler(logging.Handler):
@@ -29,6 +29,8 @@ def handle_calculate(queue, model):
         
         # Resolve coordinates and get time windows
         geo_helper = geoservices.GeoHelper(model.configuration["google_api_key"], model.configuration["bing_api_key"])
+        geo_helper.load_cache() # Load cache from filesystem
+
         addresses = []
         locations = []
         time_windows = []
@@ -46,19 +48,28 @@ def handle_calculate(queue, model):
         # Calculate distances
         matrix = geo_helper.calculate_distance_time_matrix(locations)
 
+        # Save file to filesystem for reuse
+        geo_helper.persist_cache()
+
         # Solve
         service_time_seconds = model.configuration["service_time"] * 60
         locations_without_start = locations[1:]
 
         solver = Solver(start_coord, locations_without_start, time_windows, service_time_seconds, MAX_VEHICLES, TIME_LIMIT_SOLUTION_MS)
         solver.travel_time_callback = travel_time_callback(matrix)
+        solver.travel_distance_callback = travel_distance_callback(matrix)
         solution = solver.solve()
 
         if not solution:
             queue.put(views.show_message("No solution", "No solution could be found. Please adjust time windows.", views.MessageLevel.ERROR))
         else:
-            excel.write_solution(solution, locations, record_set, model.configuration["service_time"], matrix, model.destination_file)
-            queue.put(views.show_message("Done", "Calculation finished! The solution has been written to the destination file.", views.MessageLevel.INFO))
+
+            # Get images for solution
+            images = geo_helper.get_map_images(solution)
+
+            # Write output excel file
+            excel.write_solution(solution, locations, images, record_set, model.configuration["service_time"], matrix, model.destination_file)
+            queue.put(views.done())
 
     except Exception as e:
         queue.put(views.show_message("An error occurred", str(e), views.MessageLevel.ERROR))
@@ -70,6 +81,14 @@ def travel_time_callback(matrix):
         entry = matrix.get_entry(from_loc, to_loc)
         if entry is None: raise ValueError("Unable to find distance/time between addresses.")
         return entry.time
+    return callback
+
+def travel_distance_callback(matrix):
+    def callback(from_loc, to_loc):
+        # Get distance from the matrix
+        entry = matrix.get_entry(from_loc, to_loc)
+        if entry is None: raise ValueError("Unable to find distance/time between addresses.")
+        return int(float(entry.distance) * 1000)
     return callback
 
 def handle_save_options(queue, config):

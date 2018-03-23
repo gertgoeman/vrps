@@ -39,22 +39,16 @@ def read_locations(path):
 
     return RecordSet(columns, entries)
 
-def write_solution(solution, locations, record_set, service_time, matrix, path):
+def write_solution(solution, locations, images, record_set, service_time, matrix, path):
     wb = openpyxl.Workbook()
 
-    i = 0
-    for vehicle in solution.vehicles:
-        # There must be at least 3 locations for the vehicle (depot + 1 destination + depot)
-        if len(vehicle.nodes) < 3: continue
-
+    for i, vehicle in enumerate(solution.vehicles):
         # Create a sheet for the vehicle
         if i == 0:
             ws = wb.active
             ws.title = "Vehicle " + str(i + 1)
         else:
             ws = wb.create_sheet(title = "Vehicle " + str(i + 1))
-
-        i = i + 1
 
         # Insert headers
         ws.append(record_set.columns + [ "Arrival Time", "Departure Time", "Travel Time", "Distance"])
@@ -87,5 +81,11 @@ def write_solution(solution, locations, record_set, service_time, matrix, path):
                     entry = record_set.entries[loc_idx - 1]
                     row = [entry[k.lower()] or "" for k in record_set.columns]
                     ws.append(row + [ arrival_time, departure_time, travel_time, distance ])
+
+            # Add the map image
+            image_index = len(vehicle.nodes) + 1 + 2 # 1 for the headers, 2 as empty space
+
+            img = openpyxl.drawing.image.Image(images[i])
+            ws.add_image(img, "A" + str(image_index))
 
     wb.save(filename = path)
