@@ -82,10 +82,10 @@ def write_solution(solution, locations, images, record_set, service_time, matrix
                     row = [entry[k.lower()] or "" for k in record_set.columns]
                     ws.append(row + [ arrival_time, departure_time, travel_time, distance ])
 
-            # Add the map image
-            image_index = len(vehicle.nodes) + 1 + 2 # 1 for the headers, 2 as empty space
+        # Add the map image
+        image_index = len(vehicle.nodes) + 1 + 2 # 1 for the headers, 2 as empty space
 
-            img = openpyxl.drawing.image.Image(images[i])
-            ws.add_image(img, "A" + str(image_index))
+        img = openpyxl.drawing.image.Image(images[i])
+        ws.add_image(img, "A" + str(image_index))
 
     wb.save(filename = path)

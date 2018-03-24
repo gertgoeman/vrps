@@ -77,8 +77,11 @@ class Solver(object):
         search_parameters.time_limit_ms = self.time_limit_ms
 
         # Add fixed dimension to count the number of nodes per vehicle
+        solver = routing.solver()
+
         always_one = "Always One"
 
+        # TODO: is this necessary? Does it actually make a difference to the solution?
         routing.AddConstantDimension(
             1,
             1000,  # Max 1000 nodes seems more than enough
@@ -89,13 +92,16 @@ class Solver(object):
             var = routing.CumulVar(routing.End(vehicle_nbr), always_one)
             routing.AddVariableMaximizedByFinalizer(var)
 
+
+        # Try to minimize the amount of vehicles
+        node_indices = []
+        for i in range(len(self.locations)):
+            node_indices.append(routing.IndexToNode(i))
+
+        routing.AddSoftSameVehicleConstraint(node_indices, 10000) # Distance is in meters, which is used as cost function. This one counts for 10 km.
+
         # Add distance dimension.
-        dist_horizon = 10000000 # (in meters) Used as both the upper bound for the slack variable (maximum amount of distance between 2 nodes) and the upper bound for the cummulative variable (total maximum amount of distance).
-        distance = "Distance"
-        dist_fix_start_cumul_to_zero_time = True
-
         total_distance_callback = self.__total_distance_callback
-
         routing.SetArcCostEvaluatorOfAllVehicles(total_distance_callback)
 
         # Add time dimension.

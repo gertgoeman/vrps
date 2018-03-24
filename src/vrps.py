@@ -10,7 +10,6 @@ from solver import Solver
 from datetime import datetime
 
 TIME_LIMIT_SOLUTION_MS = 120000 # 2 minutes (by trial and error)
-MAX_VEHICLES = 100
 
 class NotifyQueueLogHandler(logging.Handler):
     def __init__(self, queue):
@@ -55,7 +54,7 @@ def handle_calculate(queue, model):
         service_time_seconds = model.configuration["service_time"] * 60
         locations_without_start = locations[1:]
 
-        solver = Solver(start_coord, locations_without_start, time_windows, service_time_seconds, MAX_VEHICLES, TIME_LIMIT_SOLUTION_MS)
+        solver = Solver(start_coord, locations_without_start, time_windows, service_time_seconds, len(locations_without_start), TIME_LIMIT_SOLUTION_MS)
         solver.travel_time_callback = travel_time_callback(matrix)
         solver.travel_distance_callback = travel_distance_callback(matrix)
         solution = solver.solve()
