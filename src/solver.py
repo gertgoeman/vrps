@@ -76,28 +76,12 @@ class Solver(object):
         search_parameters.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
         search_parameters.time_limit_ms = self.time_limit_ms
 
-        # Add fixed dimension to count the number of nodes per vehicle
-        solver = routing.solver()
-
-        always_one = "Always One"
-
-        # TODO: is this necessary? Does it actually make a difference to the solution?
-        routing.AddConstantDimension(
-            1,
-            1000,  # Max 1000 nodes seems more than enough
-            True,
-            always_one)
-
-        for vehicle_nbr in range(self.num_vehicles):
-            var = routing.CumulVar(routing.End(vehicle_nbr), always_one)
-            routing.AddVariableMaximizedByFinalizer(var)
-
-
         # Try to minimize the amount of vehicles
         node_indices = []
         for i in range(len(self.locations)):
             node_indices.append(routing.IndexToNode(i))
 
+        # TODO: should probably be in function of total distance.
         routing.AddSoftSameVehicleConstraint(node_indices, 10000) # Distance is in meters, which is used as cost function. This one counts for 10 km.
 
         # Add distance dimension.
