@@ -5,4 +5,5 @@ build/
 __pycache__/
 config.ini
 setup.py
-.bin
+*.bin
+*.spec

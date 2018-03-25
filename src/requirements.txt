@@ -17,6 +17,7 @@ Pillow==5.0.0
 protobuf==3.3.0
 py3-ortools==6.4.4495
 pycparser==2.18
+PyInstaller==3.3.1
 pyOpenSSL==17.5.0
 python-dateutil==2.7.0
 requests==2.18.4
