@@ -63,6 +63,12 @@ class Solver(object):
 
         return self.travel_distance_callback(actual_from_node, actual_to_node)
 
+    def __cost_function(self, from_node, to_node):
+        time = self.__total_time_callback(from_node, to_node)
+        dist = self.__total_distance_callback(from_node, to_node)
+
+        return int((dist * 51.4) * time)  # Assumes an average speed of 70 kph (= 51 second per km)
+
     def solve(self):
         logger.info("Calculating solution.")
 
@@ -81,19 +87,19 @@ class Solver(object):
         for i in range(len(self.locations)):
             node_indices.append(routing.IndexToNode(i))
 
-        # TODO: should probably be in function of total distance.
-        routing.AddSoftSameVehicleConstraint(node_indices, 10000) # Distance is in meters, which is used as cost function. This one counts for 10 km.
+        # Add additional cost for each vehicle.
+        routing.AddSoftSameVehicleConstraint(node_indices, 100000)
 
-        # Add distance dimension.
-        total_distance_callback = self.__total_distance_callback
-        routing.SetArcCostEvaluatorOfAllVehicles(total_distance_callback)
-
+        #  Set cost function. We use total distance.
+        cost_function = self.__cost_function
+        routing.SetArcCostEvaluatorOfAllVehicles(cost_function)
+        
         # Add time dimension.
+        total_time_callback = self.__total_time_callback # I honestly have no idea why this is necessary, but if I don't do it, a segmentation fault is thrown.
+
         time_horizon = 24 * 3600 # Used as both the upper bound for the slack variable (maximum amount of time between 2 nodes) and the upper bound for the cummulative variable (total maximum amount of time).
         time = "Time"
         time_fix_start_cumul_to_zero_time = True
-
-        total_time_callback = self.__total_time_callback # I honestly have no idea why this is necessary, but if I don't do it, a segmentation fault is thrown.
 
         routing.AddDimension(total_time_callback,
                              time_horizon,
@@ -108,6 +114,9 @@ class Solver(object):
             start = self.time_windows[location][0]
             end = self.time_windows[location][1]
             time_dimension.CumulVar(location).SetRange(start, end)
+
+        # Set a cost coefficient on time. This should minimize "idle" time of vehicles.
+        time_dimension.SetSpanCostCoefficientForAllVehicles(2)
 
         # Solve the problem.
         assignment = routing.SolveWithParameters(search_parameters)
