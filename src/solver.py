@@ -67,8 +67,8 @@ class Solver(object):
         time = self.__total_time_callback(from_node, to_node)
         dist = self.__total_distance_callback(from_node, to_node)
 
-        return int((dist * 51.4) * time)  # Assumes an average speed of 70 kph (= 51 second per km)
-
+        return int((52.4 * dist * time) / 1000)  # Assumes an average speed of 70 kph (= 52.4 seconds per km)
+    
     def solve(self):
         logger.info("Calculating solution.")
 
